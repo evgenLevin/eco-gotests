@@ -24,10 +24,8 @@ import (
 	"github.com/openshift-kni/eco-gotests/tests/cnf/core/network/metallb/internal/tsparams"
 	"gopkg.in/k8snetworkplumbingwg/multus-cni.v4/pkg/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("FRR", Ordered, Label(tsparams.LabelFRRTestCases), ContinueOnFailure, func() {
@@ -349,14 +347,16 @@ var _ = Describe("FRR", Ordered, Label(tsparams.LabelFRRTestCases), ContinueOnFa
 
 				By("Verify node state updates on worker node 0")
 				Eventually(func() string {
-					// Get the routes
-					frrNodeState, err := metallb.ListFrrNodeState(APIClient, client.ListOptions{
-						FieldSelector: fields.SelectorFromSet(fields.Set{"metadata.name": "worker-0"})})
+					frrNodeStates, err := metallb.ListFrrNodeState(APIClient)
 					Expect(err).ToNot(HaveOccurred(), "Failed to verify BGP routes")
 
-					return frrNodeState[0].Object.Status.RunningConfig
+					for _, frrNodeState := range frrNodeStates {
+						if frrNodeState.Object.Name == workerNodeList[0].Object.Name {
+							return frrNodeState.Object.Status.RunningConfig
+						}
+					}
 
-					// Return the routes to be checked
+					return fmt.Sprintf("Worker node '%s' was not found in FRR node states", workerNodeList[0].Object.Name)
 				}, 60*time.Second, 5*time.Second).Should(SatisfyAll(
 					ContainSubstring(fmt.Sprintf("permit %s", externalAdvertisedIPv4Routes[0])),
 					Not(ContainSubstring(fmt.Sprintf("permit %s", externalAdvertisedIPv4Routes[1]))),
@@ -369,14 +369,16 @@ var _ = Describe("FRR", Ordered, Label(tsparams.LabelFRRTestCases), ContinueOnFa
 
 				By("Verify node state updates on worker node 1")
 				Eventually(func() string {
-					// Get the routes
-					frrNodeState, err := metallb.ListFrrNodeState(APIClient, client.ListOptions{
-						FieldSelector: fields.SelectorFromSet(fields.Set{"metadata.name": "worker-1"})})
+					frrNodeStates, err := metallb.ListFrrNodeState(APIClient)
 					Expect(err).ToNot(HaveOccurred(), "Failed to verify BGP routes")
 
-					return frrNodeState[0].Object.Status.RunningConfig
+					for _, frrNodeState := range frrNodeStates {
+						if frrNodeState.Object.Name == workerNodeList[1].Object.Name {
+							return frrNodeState.Object.Status.RunningConfig
+						}
+					}
 
-					// Return the routes to be checked
+					return fmt.Sprintf("Worker node '%s' was not found in FRR node states", workerNodeList[1].Object.Name)
 				}, 60*time.Second, 5*time.Second).Should(SatisfyAll(
 					ContainSubstring(fmt.Sprintf("permit %s", externalAdvertisedIPv4Routes[0])),
 					ContainSubstring(fmt.Sprintf("permit %s", externalAdvertisedIPv4Routes[1])),
